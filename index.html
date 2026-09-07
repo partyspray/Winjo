@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تواصل - المنصة الكاملة</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; color: #1c1e21; padding-bottom: 30px; }
+
+        /* شاشة التحميل الافتراضية */
+        #loadingScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f0f2f5; display: flex; justify-content: center;
+            align-items: center; z-index: 3000; font-weight: bold; color: #1877f2; font-size: 18px;
+        }
+
+        /* Auth Screen */
+        .auth-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center;
+            align-items: center; z-index: 2000;
+        }
+        .auth-card {
+            background: #fff; padding: 25px; border-radius: 12px; width: 90%; max-width: 360px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); text-align: center;
+        }
+        .auth-card h2 { margin-bottom: 15px; color: #1877f2; }
+        .auth-card input {
+            width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc;
+            border-radius: 8px; outline: none; font-size: 14px;
+        }
+        .auth-btn {
+            width: 100%; padding: 12px; background: #1877f2; color: white;
+            border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px;
+        }
+
+        /* App Navbar */
+        .navbar {
+            position: fixed; top: 0; width: 100%; height: 60px; background: #fff;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000;
+        }
+        .nav-left { display: flex; align-items: center; gap: 10px; }
+        .nav-btn { background: none; border: none; font-size: 15px; cursor: pointer; color: #65676b; padding: 5px 8px; }
+        .nav-btn.active { color: #1877f2; font-weight: bold; }
+
+        /* Feed Structure */
+        .container { display: flex; margin-top: 70px; padding: 0 10px; justify-content: center; }
+        .feed { width: 100%; max-width: 500px; }
+        .card { background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .post-input { width: 100%; border: none; background: #f0f2f5; padding: 12px; border-radius: 20px; outline: none; font-size: 14px; }
+        
+        .post-img { width: 100%; border-radius: 8px; margin-top: 10px; max-height: 350px; object-fit: cover; }
+        .preview-img { max-width: 100%; max-height: 150px; border-radius: 8px; margin-top: 10px; display: none; }
+
+        /* Comments */
+        .comments-section { margin-top: 12px; border-top: 1px solid #e4e6eb; padding-top: 10px; }
+        .comment-item { background: #f0f2f5; padding: 8px 12px; border-radius: 12px; margin-bottom: 6px; font-size: 13px; }
+        .comment-user { font-weight: bold; color: #1877f2; }
+        .comment-input-box { display: flex; gap: 6px; margin-top: 10px; }
+        .comment-input { flex: 1; border: 1px solid #ccc; padding: 8px 12px; border-radius: 18px; outline: none; font-size: 13px; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingScreen">جاري التحقق من الجلسة...</div>
+
+    <div id="authModal" class="auth-container hidden">
+        <div class="auth-card">
+            <h2 id="authTitle">تسجيل الدخول</h2>
+            <input type="text" id="usernameInput" placeholder="الاسم الكامل" class="hidden">
+            <input type="email" id="emailInput" placeholder="البريد الإلكتروني">
+            <input type="password" id="passwordInput" placeholder="كلمة المرور">
+            <button id="authSubmitBtn" class="auth-btn">دخول</button>
+            <div id="toggleAuth" style="margin-top:15px; font-size:13px; color:#65676b; cursor:pointer;">ليس لديك حساب؟ إنشاء حساب جديد</div>
+        </div>
+    </div>
+
+    <div id="app" class="hidden">
+        <nav class="navbar">
+            <div style="font-size:20px; font-weight:bold; color:#1877f2;">تواصل</div>
+            <div class="nav-left">
+                <button id="homeTab" class="nav-btn active"><i class="fa-solid fa-house"></i> الرئيسية</button>
+                <button id="profileTab" class="nav-btn"><i class="fa-solid fa-user"></i> الملف الشخصي</button>
+                <button id="logoutBtn" class="nav-btn" style="color:red;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </nav>
+
+        <div class="container">
+            <div id="homeView" class="feed">
+                <div class="card">
+                    <input type="text" id="postInput" class="post-input" placeholder="بماذا تفكر اليوم؟">
+                    <img id="imagePreview" class="preview-img" alt="Preview">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+                        <label for="imageFile" style="color:#45bd62; cursor:pointer; font-weight:bold; font-size:14px;"><i class="fa-solid fa-image"></i> صورة</label>
+                        <input type="file" id="imageFile" accept="image/*" class="hidden">
+                        <button id="submitPost" style="background:#1877f2; color:#fff; border:none; padding:8px 18px; border-radius:6px; cursor:pointer; font-weight:bold;">نشر</button>
+                    </div>
+                </div>
+                <div id="postsContainer"></div>
+            </div>
+
+            <div id="profileView" class="feed hidden">
+                <div class="card" style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;">تعديل الملف الشخصي</h3>
+                    <input type="text" id="profileNameInput" class="post-input" style="margin-bottom:12px;" placeholder="الاسم الجديد">
+                    <button id="saveProfileBtn" class="auth-btn">حفظ التغييرات</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://csxgwvtnzhxcntknpofc.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzeGd3dnRuemh4Y250a25wb2ZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg3MzI0ODIsImV4cCI6MjEwNDMwODQ4Mn0.lNoBE8MhQCNJw46-fsVd41KT65PkUlOjeWRutOg7JQY';
+        
+        // إعداد العميل مع ضمان حفظ الجلسة في LocalStorage
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+
+        const loadingScreen = document.getElementById('loadingScreen');
+        const authModal = document.getElementById('authModal');
+        const app = document.getElementById('app');
+        const homeView = document.getElementById('homeView');
+        const profileView = document.getElementById('profileView');
+        const homeTab = document.getElementById('homeTab');
+        const profileTab = document.getElementById('profileTab');
+
+        let currentUser = null;
+        let isSignUpMode = false;
+        let selectedFile = null;
+
+        homeTab.addEventListener('click', () => {
+            homeView.classList.remove('hidden');
+            profileView.classList.add('hidden');
+            homeTab.classList.add('active');
+            profileTab.classList.remove('active');
+        });
+
+        profileTab.addEventListener('click', () => {
+            profileView.classList.remove('hidden');
+            homeView.classList.add('hidden');
+            profileTab.classList.add('active');
+            homeTab.classList.remove('active');
+            document.getElementById('profileNameInput').value = currentUser?.user_metadata?.full_name || '';
+        });
+
+        document.getElementById('toggleAuth').addEventListener('click', () => {
+            isSignUpMode = !isSignUpMode;
+            document.getElementById('authTitle').innerText = isSignUpMode ? 'حساب جديد' : 'تسجيل الدخول';
+            document.getElementById('authSubmitBtn').innerText = isSignUpMode ? 'تسجيل' : 'دخول';
+            document.getElementById('usernameInput').classList.toggle('hidden', !isSignUpMode);
+            document.getElementById('toggleAuth').innerText = isSignUpMode ? 'لديك حساب بالفعل؟ دخول' : 'ليس لديك حساب؟ إنشاء حساب جديد';
+        });
+
+        document.getElementById('authSubmitBtn').addEventListener('click', async () => {
+            const email = document.getElementById('emailInput').value.trim();
+            const password = document.getElementById('passwordInput').value.trim();
+            const username = document.getElementById('usernameInput').value.trim();
+
+            if (!email || !password) return alert('أدخل البريد وكلمة المرور');
+
+            if (isSignUpMode) {
+                const { error } = await client.auth.signUp({ email, password, options: { data: { full_name: username } } });
+                if (error) alert('خطأ: ' + error.message);
+                else alert('تم إنشاء الحساب بنجاح!');
+            } else {
+                const { error } = await client.auth.signInWithPassword({ email, password });
+                if (error) alert('خطأ: ' + error.message);
+            }
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => client.auth.signOut());
+
+        document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+            const newName = document.getElementById('profileNameInput').value.trim();
+            if (!newName) return;
+
+            const { error } = await client.auth.updateUser({ data: { full_name: newName } });
+            if (error) alert('خطأ: ' + error.message);
+            else alert('تم تحديث اسمك بنجاح!');
+        });
+
+        document.getElementById('imageFile').addEventListener('change', (e) => {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                const preview = document.getElementById('imagePreview');
+                preview.src = URL.createObjectURL(selectedFile);
+                preview.style.display = 'block';
+            }
+        });
+
+        // التحقق من الجلسة ومراقبة التحديث بدقة
+        async function checkInitialSession() {
+            const { data: { session } } = await client.auth.getSession();
+            handleAuthState(session);
+
+            client.auth.onAuthStateChange((_event, session) => {
+                handleAuthState(session);
+            });
+        }
+
+        function handleAuthState(session) {
+            loadingScreen.classList.add('hidden');
+            if (session) {
+                currentUser = session.user;
+                authModal.classList.add('hidden');
+                app.classList.remove('hidden');
+                fetchPosts();
+                subscribeRealtime();
+            } else {
+                currentUser = null;
+                authModal.classList.remove('hidden');
+                app.classList.add('hidden');
+            }
+        }
+
+        checkInitialSession();
+
+        document.getElementById('submitPost').addEventListener('click', async () => {
+            const content = document.getElementById('postInput').value.trim();
+            if (!content && !selectedFile) return alert('اكتب منشوراً أو اختر صورة');
+
+            let imageUrl = null;
+            if (selectedFile) {
+                const fileName = `${Date.now()}_${selectedFile.name}`;
+                const { data } = await client.storage.from('post-images').upload(fileName, selectedFile);
+                if (data) {
+                    imageUrl = client.storage.from('post-images').getPublicUrl(fileName).data.publicUrl;
+                }
+            }
+
+            const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+            await client.from('posts').insert([{ content, user_name: userName, image_url: imageUrl }]);
+            
+            document.getElementById('postInput').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            selectedFile = null;
+        });
+
+        async function fetchPosts() {
+            const { data: posts } = await client.from('posts').select('*').order('created_at', { ascending: false });
+            const container = document.getElementById('postsContainer');
+            container.innerHTML = '';
+            posts?.forEach(post => renderPost(post));
+        }
+
+        function renderPost(post) {
+            const container = document.getElementById('postsContainer');
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.id = `post-${post.id}`;
+            
+            let imgHtml = post.image_url ? `<img src="${post.image_url}" class="post-img">` : '';
+
+            card.innerHTML = `
+                <div style="font-weight:bold; color:#1877f2;">${post.user_name}</div>
+                <p style="margin-top:8px; line-height:1.4;">${post.content}</p>
+                ${imgHtml}
+                <div class="comments-section">
+                    <div id="comments-list-${post.id}"></div>
+                    <div class="comment-input-box">
+                        <input type="text" id="comment-input-${post.id}" class="comment-input" placeholder="اكتب تعليقاً...">
+                        <button onclick="sendComment('${post.id}')" style="background:#1877f2; color:#fff; border:none; padding:6px 12px; border-radius:12px; cursor:pointer; font-weight:bold;">إرسال</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+            fetchComments(post.id);
+        }
+
+        async function fetchComments(postId) {
+            const { data: comments } = await client.from('comments').select('*').eq('post_id', postId).order('created_at', { ascending: true });
+            const list = document.getElementById(`comments-list-${postId}`);
+            if (!list) return;
+            list.innerHTML = '';
+            comments?.forEach(c => {
+                list.innerHTML += `<div class="comment-item"><span class="comment-user">${c.user_name}:</span> ${c.content}</div>`;
+            });
+        }
+
+        async function sendComment(postId) {
+            const input = document.getElementById(`comment-input-${postId}`);
+            const content = input.value.trim();
+            if (!content) return;
+
+            const userName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+            await client.from('comments').insert([{ post_id: postId, user_name: userName, content }]);
+            input.value = '';
+        }
+
+        function subscribeRealtime() {
+            client.channel('public-updates')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, payload => fetchPosts())
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, payload => fetchComments(payload.new.post_id))
+                .subscribe();
+        }
+    </script>
+</body>
+</html>
